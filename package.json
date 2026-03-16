@@ -8,7 +8,7 @@
     "validate:source": "node scripts/validate-source.js",
     "build:embeddings": "node scripts/generate-embeddings.js",
     "build:embeddings:force": "node scripts/generate-embeddings.js --force",
-    "test:openai": "node scripts/test-openai-embedding.js",
+    "test:openai": "node scripts/test-openai-connectivity.js",
     "test": "node --test"
   },
   "dependencies": {

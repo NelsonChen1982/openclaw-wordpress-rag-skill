@@ -13,6 +13,9 @@ const FORCE = process.argv.includes('--force');
 const ROOT = process.cwd();
 const SOURCE_DIR = path.join(ROOT, 'data', 'source');
 const OUT_DIR = path.join(ROOT, 'data', 'embeddings');
+const BATCH_SIZE = Number(process.env.EMBEDDING_BATCH_SIZE || 10);
+const BASE_DELAY_MS = Number(process.env.EMBEDDING_BASE_DELAY_MS || 200);
+const MAX_RETRIES = Number(process.env.EMBEDDING_MAX_RETRIES || 3);
 
 if (!process.env.OPENAI_API_KEY) {
   console.error('Missing OPENAI_API_KEY in environment');
@@ -32,14 +35,28 @@ function readJson(p, fallback = null) {
 }
 
 
-async function embedWithRetry(text, retries = 3) {
+async function embedWithRetry(text, retries = MAX_RETRIES) {
   for (let i = 0; i < retries; i++) {
     try {
       const r = await client.embeddings.create({ model: EMBEDDING_MODEL, input: text });
-      return r.data[0].embedding;
+      return {
+        embedding: r.data[0].embedding,
+        usageTokens: r.usage?.total_tokens || 0,
+      };
     } catch (e) {
       if (i === retries - 1) throw e;
-      await sleep(1000);
+      const backoff = BASE_DELAY_MS * Math.pow(2, i) + Math.floor(Math.random() * 120);
+      await sleep(backoff);
+    }
+  }
+}
+
+async function processInBatches(items, handler, batchSize = BATCH_SIZE) {
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    for (const item of batch) {
+      await handler(item);
+      await sleep(BASE_DELAY_MS);
     }
   }
 }
@@ -71,9 +88,10 @@ async function run() {
 
   let productCount = 0;
   let articleCount = 0;
+  let tokenCount = 0;
 
   const outProducts = [];
-  for (const p of products) {
+  await processInBatches(products, async (p) => {
     const id = String(p.id);
     const text = buildProductText(p);
     const textHash = hashText(text);
@@ -81,17 +99,17 @@ async function run() {
 
     if (!FORCE && prev && prev.textHash === textHash && Array.isArray(prev.embedding)) {
       outProducts.push(prev);
-      continue;
+      return;
     }
 
-    const embedding = await embedWithRetry(text);
+    const { embedding, usageTokens } = await embedWithRetry(text);
     outProducts.push({ id: p.id, name: p.name, text_used: text, textHash, embedding });
     productCount++;
-    await sleep(200);
-  }
+    tokenCount += usageTokens;
+  });
 
   const outArticles = [];
-  for (const a of articles) {
+  await processInBatches(articles, async (a) => {
     const id = String(a.id);
     const text = buildArticleText(a);
     const textHash = hashText(text);
@@ -99,14 +117,14 @@ async function run() {
 
     if (!FORCE && prev && prev.textHash === textHash && Array.isArray(prev.embedding)) {
       outArticles.push(prev);
-      continue;
+      return;
     }
 
-    const embedding = await embedWithRetry(text);
+    const { embedding, usageTokens } = await embedWithRetry(text);
     outArticles.push({ id: a.id, title: a.title, text_used: text, textHash, embedding });
     articleCount++;
-    await sleep(200);
-  }
+    tokenCount += usageTokens;
+  });
 
   fs.writeFileSync(path.join(OUT_DIR, 'product-embeddings.json'), JSON.stringify({
     model: EMBEDDING_MODEL,

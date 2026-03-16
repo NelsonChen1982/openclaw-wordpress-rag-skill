@@ -4,6 +4,7 @@
   "private": true,
   "description": "OpenClaw skill project for WordPress + WooCommerce RAG pipeline",
   "scripts": {
+    "fetch:source": "node scripts/fetch-source-data.js",
     "validate:source": "node scripts/validate-source.js",
     "build:embeddings": "node scripts/generate-embeddings.js",
     "build:embeddings:force": "node scripts/generate-embeddings.js --force",

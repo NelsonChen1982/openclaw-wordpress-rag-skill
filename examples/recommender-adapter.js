@@ -1,4 +1,4 @@
-const { retrieveSemanticMatches } = require('../lib/retrieval-helper');
+const { retrieveSemanticMatches, loadEmbeddingsSafe } = require('../lib/retrieval-helper');
 
 function toMapById(rows = []) {
   const map = new Map();
@@ -21,6 +21,7 @@ async function rankWithSemantic({
   articleCandidates,
   productEmbeddingItems,
   articleEmbeddingItems,
+  embeddingBaseDir,
   existingScores = {},
   config = {},
 }) {
@@ -30,15 +31,34 @@ async function rankWithSemantic({
     semantic: Number(config.semanticWeight ?? process.env.RANK_SEMANTIC_WEIGHT ?? 0.3),
   };
 
+  let productEmbeds = productEmbeddingItems;
+  let articleEmbeds = articleEmbeddingItems;
+  let semanticWarning = null;
+
+  if (!productEmbeds || !articleEmbeds) {
+    const loaded = loadEmbeddingsSafe(embeddingBaseDir || process.cwd());
+    if (!loaded.ok) {
+      semanticWarning = loaded.warning;
+      console.warn(`[semantic] ${semanticWarning}`);
+    }
+    productEmbeds = loaded.products;
+    articleEmbeds = loaded.articles;
+  }
+
   const semantic = await retrieveSemanticMatches({
     profile,
-    productEmbeddingItems,
-    articleEmbeddingItems,
+    productEmbeddingItems: productEmbeds || [],
+    articleEmbeddingItems: articleEmbeds || [],
     productCandidates,
     articleCandidates,
     topKProducts: Number(config.topKProducts ?? 20),
     topKArticles: Number(config.topKArticles ?? 8),
   });
+
+  if (semantic.warning) {
+    semanticWarning = semantic.warning;
+    console.warn(`[semantic] ${semanticWarning}`);
+  }
 
   const semanticById = toMapById(semantic.products);
 
@@ -72,6 +92,8 @@ async function rankWithSemantic({
     semanticArticles: semantic.articles,
     queryText: semantic.queryText,
     weights,
+    semanticSkipped: !!semantic.skipped,
+    semanticWarning,
   };
 }
 

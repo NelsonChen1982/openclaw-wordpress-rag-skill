@@ -6,10 +6,11 @@
   "scripts": {
     "build:embeddings": "node scripts/generate-embeddings.js",
     "build:embeddings:force": "node scripts/generate-embeddings.js --force",
+    "test:openai": "node scripts/test-openai-embedding.js",
     "test": "node --test"
   },
   "dependencies": {
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.6.1",
     "openai": "^4.104.0",
     "openspec": "^0.0.0"
   }

@@ -69,6 +69,7 @@ function toMap(items = []) {
 
 async function run() {
   ensureDir(OUT_DIR);
+  const startedAt = Date.now();
 
   const products = readJson(path.join(SOURCE_DIR, 'product-meta.json'), []);
   const articles = readJson(path.join(SOURCE_DIR, 'article-insights.json'), []);
@@ -88,6 +89,8 @@ async function run() {
 
   let productCount = 0;
   let articleCount = 0;
+  let productSkipped = 0;
+  let articleSkipped = 0;
   let tokenCount = 0;
 
   const outProducts = [];
@@ -99,6 +102,7 @@ async function run() {
 
     if (!FORCE && prev && prev.textHash === textHash && Array.isArray(prev.embedding)) {
       outProducts.push(prev);
+      productSkipped++;
       return;
     }
 
@@ -117,6 +121,7 @@ async function run() {
 
     if (!FORCE && prev && prev.textHash === textHash && Array.isArray(prev.embedding)) {
       outArticles.push(prev);
+      articleSkipped++;
       return;
     }
 
@@ -138,7 +143,19 @@ async function run() {
     items: outArticles,
   }, null, 2));
 
-  console.log(`done | model=${EMBEDDING_MODEL} | updated products=${productCount} articles=${articleCount}`);
+  const elapsedMs = Date.now() - startedAt;
+  const stats = {
+    model: EMBEDDING_MODEL,
+    mode: FORCE ? 'force' : 'incremental',
+    source: { products: products.length, articles: articles.length },
+    updated: { products: productCount, articles: articleCount },
+    skipped: { products: productSkipped, articles: articleSkipped },
+    usage: { totalTokens: tokenCount },
+    elapsedMs,
+  };
+
+  console.log('✅ embedding build complete');
+  console.log(JSON.stringify(stats, null, 2));
 }
 
 run().catch(err => {

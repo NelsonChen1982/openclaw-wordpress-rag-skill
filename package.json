@@ -8,6 +8,8 @@
     "validate:source": "node scripts/validate-source.js",
     "build:embeddings": "node scripts/generate-embeddings.js",
     "build:embeddings:force": "node scripts/generate-embeddings.js --force",
+    "pipeline": "node scripts/embedding-worker.js",
+    "pipeline:rebuild": "node scripts/embedding-worker.js --skip-fetch",
     "test:openai": "node scripts/test-openai-connectivity.js",
     "test": "node --test tests/*.test.js"
   },

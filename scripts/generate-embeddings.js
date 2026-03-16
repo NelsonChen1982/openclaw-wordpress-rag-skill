@@ -51,14 +51,23 @@ async function embedWithRetry(text, retries = MAX_RETRIES) {
   }
 }
 
-async function processInBatches(items, handler, batchSize = BATCH_SIZE) {
-  for (let i = 0; i < items.length; i += batchSize) {
+async function processInBatches(items, handler, label = 'items', batchSize = BATCH_SIZE) {
+  const total = items.length;
+  let processed = 0;
+  const startTime = Date.now();
+  for (let i = 0; i < total; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
     for (const item of batch) {
       await handler(item);
+      processed++;
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const rate = (processed / (Date.now() - startTime) * 1000).toFixed(1);
+      const eta = processed > 0 ? (((total - processed) / (processed / (Date.now() - startTime) * 1000))).toFixed(0) : '?';
+      process.stdout.write(`\r[${label}] ${processed}/${total} (${((processed/total)*100).toFixed(1)}%) | ${elapsed}s elapsed | ${rate}/s | ETA ${eta}s   `);
       await sleep(BASE_DELAY_MS);
     }
   }
+  if (total > 0) process.stdout.write('\n');
 }
 
 function toMap(items = []) {
@@ -94,6 +103,7 @@ async function run() {
   let truncatedCount = 0;
   let tokenCount = 0;
 
+  console.log(`\n📦 Processing ${products.length} products...`);
   const outProducts = [];
   await processInBatches(products, async (p) => {
     const id = String(p.id);
@@ -102,7 +112,7 @@ async function run() {
     text = truncateText(text);
     if (text.length < originalLen) {
       truncatedCount++;
-      console.warn(`[truncated] product ${id} (${p.name}): ${originalLen} -> ${text.length} chars`);
+      console.warn(`\n[truncated] product ${id} (${p.name}): ${originalLen} -> ${text.length} chars`);
     }
     const textHash = hashText(text);
     const prev = prevProductMap.get(id);
@@ -117,8 +127,9 @@ async function run() {
     outProducts.push({ id: p.id, name: p.name, text_used: text, textHash, embedding });
     productCount++;
     tokenCount += usageTokens;
-  });
+  }, 'products');
 
+  console.log(`\n📄 Processing ${articles.length} articles...`);
   const outArticles = [];
   await processInBatches(articles, async (a) => {
     const id = String(a.id);
@@ -127,7 +138,7 @@ async function run() {
     text = truncateText(text);
     if (text.length < originalLen) {
       truncatedCount++;
-      console.warn(`[truncated] article ${id} (${a.title}): ${originalLen} -> ${text.length} chars`);
+      console.warn(`\n[truncated] article ${id} (${a.title}): ${originalLen} -> ${text.length} chars`);
     }
     const textHash = hashText(text);
     const prev = prevArticleMap.get(id);
@@ -142,7 +153,7 @@ async function run() {
     outArticles.push({ id: a.id, title: a.title, text_used: text, textHash, embedding });
     articleCount++;
     tokenCount += usageTokens;
-  });
+  }, 'articles');
 
   fs.writeFileSync(path.join(OUT_DIR, 'product-embeddings.json'), JSON.stringify({
     model: EMBEDDING_MODEL,

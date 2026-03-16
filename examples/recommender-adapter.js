@@ -87,6 +87,9 @@ async function rankWithSemantic({
     };
   }).sort((a, b) => b.totalScore - a.totalScore);
 
+  // TODO: articles are passed through without weighted ranking.
+  // If your system uses articles for content pairing (e.g. "why we recommend X"),
+  // add a parallel weighting step here similar to product ranking above.
   return {
     ranked,
     semanticArticles: semantic.articles,

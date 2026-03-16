@@ -6,7 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const OpenAI = require('openai');
 const { validateSourceData } = require('../lib/source-validators');
-const { buildProductText, buildArticleText } = require('../lib/text-builders');
+const { buildProductText, buildArticleText, truncateText } = require('../lib/text-builders');
 
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-3-small';
 const FORCE = process.argv.includes('--force');
@@ -91,12 +91,19 @@ async function run() {
   let articleCount = 0;
   let productSkipped = 0;
   let articleSkipped = 0;
+  let truncatedCount = 0;
   let tokenCount = 0;
 
   const outProducts = [];
   await processInBatches(products, async (p) => {
     const id = String(p.id);
-    const text = buildProductText(p);
+    let text = buildProductText(p);
+    const originalLen = text.length;
+    text = truncateText(text);
+    if (text.length < originalLen) {
+      truncatedCount++;
+      console.warn(`[truncated] product ${id} (${p.name}): ${originalLen} -> ${text.length} chars`);
+    }
     const textHash = hashText(text);
     const prev = prevProductMap.get(id);
 
@@ -115,7 +122,13 @@ async function run() {
   const outArticles = [];
   await processInBatches(articles, async (a) => {
     const id = String(a.id);
-    const text = buildArticleText(a);
+    let text = buildArticleText(a);
+    const originalLen = text.length;
+    text = truncateText(text);
+    if (text.length < originalLen) {
+      truncatedCount++;
+      console.warn(`[truncated] article ${id} (${a.title}): ${originalLen} -> ${text.length} chars`);
+    }
     const textHash = hashText(text);
     const prev = prevArticleMap.get(id);
 
@@ -150,6 +163,7 @@ async function run() {
     source: { products: products.length, articles: articles.length },
     updated: { products: productCount, articles: articleCount },
     skipped: { products: productSkipped, articles: articleSkipped },
+    truncated: truncatedCount,
     usage: { totalTokens: tokenCount },
     elapsedMs,
   };

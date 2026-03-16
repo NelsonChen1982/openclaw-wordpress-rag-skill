@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const OpenAI = require('openai');
+const { validateSourceData } = require('../lib/source-validators');
+const { buildProductText, buildArticleText } = require('../lib/text-builders');
 
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-3-small';
 const FORCE = process.argv.includes('--force');
@@ -29,24 +31,6 @@ function readJson(p, fallback = null) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
-function buildProductText(p) {
-  return [
-    p.name,
-    `風味：${(p.meta?.sensory?.aroma || []).join('、')}`,
-    `情境：${(p.meta?.occasion?.settings || []).join('、')}`,
-    `類型：${(p.types || []).join('、')}`,
-    `酒造：${(p.brewery || []).join('、')}`,
-  ].filter(Boolean).join('。');
-}
-
-function buildArticleText(a) {
-  return [
-    a.title,
-    `摘要：${a.summary || ''}`,
-    `標籤：${(a.tagBlock?.keywords || []).join('、')}`,
-    `洞察：${(a.keyInsights || []).join('、')}`,
-  ].filter(Boolean).join('。');
-}
 
 async function embedWithRetry(text, retries = 3) {
   for (let i = 0; i < retries; i++) {
@@ -71,6 +55,13 @@ async function run() {
 
   const products = readJson(path.join(SOURCE_DIR, 'product-meta.json'), []);
   const articles = readJson(path.join(SOURCE_DIR, 'article-insights.json'), []);
+
+  const validation = validateSourceData(products, articles);
+  if (!validation.ok) {
+    console.error('source validation failed');
+    validation.errors.forEach(e => console.error(`- ${e}`));
+    process.exit(1);
+  }
 
   const prevProducts = readJson(path.join(OUT_DIR, 'product-embeddings.json'), { items: [] });
   const prevArticles = readJson(path.join(OUT_DIR, 'article-embeddings.json'), { items: [] });

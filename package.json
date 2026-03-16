@@ -1,0 +1,15 @@
+{
+  "name": "openclaw-wordpress-rag-skill",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenClaw skill project for WordPress + WooCommerce RAG pipeline",
+  "scripts": {
+    "build:embeddings": "node scripts/generate-embeddings.js",
+    "build:embeddings:force": "node scripts/generate-embeddings.js --force",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "openai": "^4.104.0"
+  }
+}
